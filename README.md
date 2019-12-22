@@ -59,7 +59,7 @@ The heuristic used to this end is to find functions whose name begins with `FUN_
 
 ## Auto Creating Delphi Structs
 
-To automatically create structs and virtual method tables, there is a separate script [DhrakeParseClass](DhrakeParseClass.java). After importing symbols from [IDC], you can search the **Symbol Table** in Ghidra for symbols that begin with `VMT_`. If you place the cursor on the address of such a symbol, running [DhrakeParseClass](DhrakeParseClass.java) will automatically create a structure for the vtable and for the class body itself. The class structure will have only one entry named `vt`, which will point to the vtable structure. This structure is automatically filled with the function pointers to the methods of this class.
+To automatically create structs and virtual method tables, there is a separate script [DhrakeParseClass](DhrakeParseClass.java). After importing symbols from [IDR], you can search the **Symbol Table** in Ghidra for symbols that begin with `VMT_`. If you place the cursor on the address of such a symbol, running [DhrakeParseClass](DhrakeParseClass.java) will automatically create a structure for the vtable and for the class body itself. The class structure will have only one entry named `vt`, which will point to the vtable structure. This structure is automatically filled with the function pointers to the methods of this class.
 
 ## Reparing LStrCatN
 
