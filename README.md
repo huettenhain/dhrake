@@ -1,6 +1,6 @@
 # Dhrake
 
-Dhrake is a collection of scripts for reverse engineering Delphi binaries with [Ghidra] and [IDR].
+Dhrake is a collection of scripts for reverse engineering Delphi binaries with [Ghidra] and [IDR]. 
 
 ## TL/DR How to Use Dhrake
 
@@ -13,6 +13,10 @@ Dhrake is a collection of scripts for reverse engineering Delphi binaries with [
    ```
 5. Navigate to `VMT_472694_TStringList` in the listing view and run [DhrakeParseClass](DhrakeParseClass.java).
 6. Profit.
+
+## Private IDR Build
+
+Under the tag [INITIAL], you can find [my private build if IDR][IDR-BUILD]. I compiled this myself from the [IDR] repository in a virtual machine. I take no responsibility what so ever for this software or this build. I run this on my private machine host, I think it is a great piece of software, but if you want to be on the safe side, use a virtual machine.
 
 ## What Drake Does
 
@@ -68,3 +72,5 @@ but it is hard for Ghidra to propertly identify the number of additional argumen
 
 [Ghidra]: https://github.com/NationalSecurityAgency/ghidra
 [IDR]: https://github.com/crypto2011/IDR
+[IDR-BUILD]: https://github.com/huettenhain/dhrake/releases/download/INITIAL/IDR.7z
+[INITIAL]: https://github.com/huettenhain/dhrake/releases/tag/INITIAL
