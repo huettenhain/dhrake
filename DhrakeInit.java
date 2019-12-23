@@ -104,7 +104,7 @@ public class DhrakeInit extends GhidraScript {
 					throw new IllegalStateException();
 				return argument.getOffset();
 			}
-		}		
+		}
 		throw new IllegalStateException();
 	}
 	
@@ -132,14 +132,14 @@ public class DhrakeInit extends GhidraScript {
 			return -1;
 		}
 	}
-		
+
 	private void overrideStrCatN(String name, DataType LPTSTR) {
 		// This method fixes a *StrCatN function for string pointers of the given data type LPTSTR.
 		DataType PPTSTR = PointerDataType.getPointer(LPTSTR, currentProgram.getDataTypeManager());
 		Iterator<Function> functions = this.getGlobalFunctions(name).iterator();
-        while (functions.hasNext()) {
-        	Function StrCatN = functions.next();
-        	Reference refs[] = this.getReferencesTo(StrCatN.getEntryPoint());
+		while (functions.hasNext()) {
+			Function StrCatN = functions.next();
+			Reference refs[] = this.getReferencesTo(StrCatN.getEntryPoint());
 			StrCatN.setVarArgs(true);
 
 			try {
@@ -155,43 +155,43 @@ public class DhrakeInit extends GhidraScript {
 				this.logMsg("%08X Unable to correctly retype %s.", offset, name);
 			}
 
-        	monitor.setMaximum(refs.length);
-        	monitor.setProgress(0);
-        	monitor.setMessage(String.format("Obtaining references to %s.", name));
-        	for (int j=0; j < refs.length; j++) {
-        		Reference ref = refs[j];
-        		if (ref.getReferenceType() == RefType.UNCONDITIONAL_CALL) {
-        			Address addr = ref.getFromAddress();
-        			Function caller = this.getFunctionBefore(addr);
-        			long count = this.getStrCatCount(caller, addr);
-        			long offset = addr.getOffset();
-        			if (count < 0) {
-        				this.logMsg("%08X %s call with N unknown, skipping", offset, name);
-        			}
-        			FunctionDefinitionDataType signature = new FunctionDefinitionDataType(name);
-        			List<ParameterDefinitionImpl> args = new ArrayList<>();
-        			args.add(new ParameterDefinitionImpl("Destination", PPTSTR, "Receives the concatenated string"));
-        			args.add(new ParameterDefinitionImpl("StringCount", UINT, "The number of strings to be concatenated"));
-        			
-    				// Unfortunately, I know of no way to make HighFunctionDBUtil.writeOverride override
-        			// a function call in such a manner that custom storage can be used. Now, *StrCatN expects
-        			// the first two arguments in EAX and EDX, and all the remaining arguments on the stack.
-        			// However, the __register calling convention also dictates that the third parameter is
-        			// passed in the ECX register. The best solution I could come up with is to add a dummy
-        			// variable which represents this third argument, which does not actually exist:
-        			args.add(new ParameterDefinitionImpl(
-						String.format("__dummy_%02d", offset & 0xFF), UINT, "Dummy Variable"));
-        			
-        			for (long k=0; k < count; k++)
-    					args.add(new ParameterDefinitionImpl(String.format("String%d", count - k), LPTSTR, ""));
+			monitor.setMaximum(refs.length);
+			monitor.setProgress(0);
+			monitor.setMessage(String.format("Obtaining references to %s.", name));
+			for (int j=0; j < refs.length; j++) {
+				Reference ref = refs[j];
+				if (ref.getReferenceType() == RefType.UNCONDITIONAL_CALL) {
+					Address addr = ref.getFromAddress();
+					Function caller = this.getFunctionBefore(addr);
+					long count = this.getStrCatCount(caller, addr);
+					long offset = addr.getOffset();
+					if (count < 0) {
+						this.logMsg("%08X %s call with N unknown, skipping", offset, name);
+					}
+					FunctionDefinitionDataType signature = new FunctionDefinitionDataType(name);
+					List<ParameterDefinitionImpl> args = new ArrayList<>();
+					args.add(new ParameterDefinitionImpl("Destination", PPTSTR, "Receives the concatenated string"));
+					args.add(new ParameterDefinitionImpl("StringCount", UINT, "The number of strings to be concatenated"));
 
-        			signature.setArguments(args.toArray(new ParameterDefinitionImpl[args.size()]));
-        			signature.setReturnType(UINT);
-        			signature.setVarArgs(false);
-        			int transaction = currentProgram.startTransaction(
-    					String.format("Fixing call to %s at %08X", name, offset));
-        			boolean success = false;
-        			try {
+					// Unfortunately, I know of no way to make HighFunctionDBUtil.writeOverride override
+					// a function call in such a manner that custom storage can be used. Now, *StrCatN expects
+					// the first two arguments in EAX and EDX, and all the remaining arguments on the stack.
+					// However, the __register calling convention also dictates that the third parameter is
+					// passed in the ECX register. The best solution I could come up with is to add a dummy
+					// variable which represents this third argument, which does not actually exist:
+					args.add(new ParameterDefinitionImpl(
+						String.format("__dummy_%02d", offset & 0xFF), UINT, "Dummy Variable"));
+
+					for (long k=0; k < count; k++)
+						args.add(new ParameterDefinitionImpl(String.format("String%d", count - k), LPTSTR, ""));
+
+					signature.setArguments(args.toArray(new ParameterDefinitionImpl[args.size()]));
+					signature.setReturnType(UINT);
+					signature.setVarArgs(false);
+					int transaction = currentProgram.startTransaction(
+						String.format("Fixing call to %s at %08X", name, offset));
+					boolean success = false;
+					try {
 						HighFunctionDBUtil.writeOverride(caller, addr, signature);
 						success = true;
 					} catch (Exception e) {
@@ -199,17 +199,17 @@ public class DhrakeInit extends GhidraScript {
 					} finally {
 						currentProgram.endTransaction(transaction, success);
 					}
-        		}
-        		monitor.setProgress(j);
-        	}
-        }
+				}
+				monitor.setProgress(j);
+			}
+		}
 	}
 	
 	private boolean importSymbolsFromIDC() {
-    	File idc;
-    	String[] lines;
-    	
-    	monitor.setMessage("loading symbols from IDC");
+		File idc;
+		String[] lines;
+
+		monitor.setMessage("loading symbols from IDC");
 
 		try {
 			idc = this.askFile("IDC File Path", "Load an IDC file");
@@ -225,20 +225,20 @@ public class DhrakeInit extends GhidraScript {
 		}
 
 		Pattern pattern = Pattern.compile(
-    			"^\\s*MakeNameEx\\((?:0x)?([A-Fa-f0-9]+),\\s*\"([^\"]*)\",\\s*([xA-Fa-f0-9]+)\\);\\s*$");
-        monitor.setMaximum(lines.length);
-        for (int k=0; k < lines.length; k++) {
-        	monitor.setProgress(k);
-        	if (!lines[k].contains("MakeNameEx"))
+				"^\\s*MakeNameEx\\((?:0x)?([A-Fa-f0-9]+),\\s*\"([^\"]*)\",\\s*([xA-Fa-f0-9]+)\\);\\s*$");
+		monitor.setMaximum(lines.length);
+		for (int k=0; k < lines.length; k++) {
+			monitor.setProgress(k);
+			if (!lines[k].contains("MakeNameEx"))
 				continue;
-        	Matcher match = pattern.matcher(lines[k]);
+			Matcher match = pattern.matcher(lines[k]);
 			if (!match.matches())
 				continue;
 			Integer offset = Integer.parseUnsignedInt(match.group(1), 16);
 			Address entryPoint = this.toAddr(offset);
 			String functionName = match.group(2);
 			monitor.setMessage(functionName);
-			if (functionName.strip().length() > 0) {					
+			if (functionName.strip().length() > 0) {
 				try {
 					this.renameSymbol(entryPoint, functionName);
 				} catch (InvalidInputException e) {
@@ -247,34 +247,34 @@ public class DhrakeInit extends GhidraScript {
 			}
 		}
 
-        return true;
+		return true;
 	}
 	
 	private void repairStringCompareFunctions() {
 		try {
 			monitor.setMessage("reparing known function signatures");
-			
+
 			VariableStorage zfReturn = new VariableStorage(
 				currentProgram, currentProgram.getRegister("ZF"));
-	        Map<String, DataType[]> comparators = Map.of(
-	    	    "@PStrCmp", new DataType[] { LPBYTE, LPBYTE },
-	    	    "@LStrCmp", new DataType[] { LPCSTR, LPCSTR },
-	    	    "@WStrCmp", new DataType[] { LPWSTR, LPWSTR },
-	    	    "@UStrCmp", new DataType[] { LPWSTR, LPWSTR },
-	    	    "@AStrCmp", new DataType[] { LPCSTR, LPCSTR, UINT }
-	    	);
-	        Register argLocations[] = new Register[] {
-	        	currentProgram.getRegister("EAX"),
-	        	currentProgram.getRegister("EDX"),
-	        	currentProgram.getRegister("ECX")
-	        };
-	        String argNames[] = new String[] {"a", "b", "size"};
-	        
-	        for (Map.Entry<String, DataType[]> cmp : comparators.entrySet()) {       
-	    		Iterator<Function> functions = this.getGlobalFunctions(cmp.getKey()).iterator();
-	    		while (functions.hasNext()) {
-	    			Function function = functions.next();
-	    			function.setCustomVariableStorage(true);
+			Map<String, DataType[]> comparators = Map.of(
+				"@PStrCmp", new DataType[] { LPBYTE, LPBYTE },
+				"@LStrCmp", new DataType[] { LPCSTR, LPCSTR },
+				"@WStrCmp", new DataType[] { LPWSTR, LPWSTR },
+				"@UStrCmp", new DataType[] { LPWSTR, LPWSTR },
+				"@AStrCmp", new DataType[] { LPCSTR, LPCSTR, UINT }
+			);
+			Register argLocations[] = new Register[] {
+				currentProgram.getRegister("EAX"),
+				currentProgram.getRegister("EDX"),
+				currentProgram.getRegister("ECX")
+			};
+			String argNames[] = new String[] {"a", "b", "size"};
+
+			for (Map.Entry<String, DataType[]> cmp : comparators.entrySet()) {	   
+				Iterator<Function> functions = this.getGlobalFunctions(cmp.getKey()).iterator();
+				while (functions.hasNext()) {
+					Function function = functions.next();
+					function.setCustomVariableStorage(true);
 					function.setReturn(BOOL, zfReturn, DhrakeSource);
 					DataType argTypes[] = cmp.getValue();
 					List <ParameterImpl> args = new ArrayList<>();
@@ -290,8 +290,8 @@ public class DhrakeInit extends GhidraScript {
 							function.getEntryPoint().getOffset(), cmp.getKey()
 						);
 					}
-	    		}
-	        }
+				}
+			}
 		} catch (InvalidInputException e1) {
 			this.logMsg("Unexpected error obtaining registers");
 		}
@@ -299,22 +299,22 @@ public class DhrakeInit extends GhidraScript {
 	
 	public void repairLibraryFunctionSignatures() {
 	
-        this.overrideStrCatN("@LStrCatN", LPCSTR);
-        this.overrideStrCatN("@WStrCatN", LPWSTR);
-        this.overrideStrCatN("@UStrCatN", LPWSTR);
-		
+		this.overrideStrCatN("@LStrCatN", LPCSTR);
+		this.overrideStrCatN("@WStrCatN", LPWSTR);
+		this.overrideStrCatN("@UStrCatN", LPWSTR);
+
 		this.repairStringCompareFunctions();
-		
-        Map<String, DataType[]> comparators = Map.of(
-    		"@LStrCat3", new DataType[] { LPPCSTR, LPCSTR, LPCSTR },
-    	    "@UStrCat3", new DataType[] { LPPWSTR, LPWSTR, LPWSTR },
-    	    "@WStrCat3", new DataType[] { LPPWSTR, LPWSTR, LPWSTR }
-    	);
-        
-        for (Map.Entry<String, DataType[]> sig : comparators.entrySet()) {       
-    		Iterator<Function> functions = this.getGlobalFunctions(sig.getKey()).iterator();
-    		while (functions.hasNext()) {
-    			Function function = functions.next();
+
+		Map<String, DataType[]> comparators = Map.of(
+			"@LStrCat3", new DataType[] { LPPCSTR, LPCSTR, LPCSTR },
+			"@UStrCat3", new DataType[] { LPPWSTR, LPWSTR, LPWSTR },
+			"@WStrCat3", new DataType[] { LPPWSTR, LPWSTR, LPWSTR }
+		);
+
+		for (Map.Entry<String, DataType[]> sig : comparators.entrySet()) {	   
+			Iterator<Function> functions = this.getGlobalFunctions(sig.getKey()).iterator();
+			while (functions.hasNext()) {
+				Function function = functions.next();
 				DataType argTypes[] = sig.getValue();
 				List <ParameterImpl> args = new ArrayList<>();
 				try {
@@ -329,8 +329,8 @@ public class DhrakeInit extends GhidraScript {
 						function.getEntryPoint().getOffset(), sig.getKey()
 					);
 				}
-    		}
-        }
+			}
+		}
 	}
 	
 	private void repairWrongFunctionEntries() {
@@ -340,10 +340,10 @@ public class DhrakeInit extends GhidraScript {
 		Function previousFunction = this.getFunctionAfter(this.getAddressFactory().getAddress("0"));
 		Function currentFunction;
 		FunctionManager functionManager = currentProgram.getFunctionManager();
-		
+
 		int transaction = currentProgram.startTransaction("fixing erroneous function entries");
 		boolean success = true;
-		try {	
+		try {
 			while ((currentFunction = this.getFunctionAfter(previousFunction)) != null) {
 				if (!previousFunction.isThunk()) {
 					Address start = previousFunction.getEntryPoint();
@@ -368,15 +368,15 @@ public class DhrakeInit extends GhidraScript {
 		}
 	}
 	
-    public void run()  {
-    	monitor.setCancelEnabled(true);
-    	monitor.setShowProgressValue(true);
+	public void run()  {
+		monitor.setCancelEnabled(true);
+		monitor.setShowProgressValue(true);
 
-    	if (!this.importSymbolsFromIDC())
-    		return;
+		if (!this.importSymbolsFromIDC())
+			return;
 
-        this.repairLibraryFunctionSignatures();
-        this.repairWrongFunctionEntries();
-    }
+		this.repairLibraryFunctionSignatures();
+		this.repairWrongFunctionEntries();
+	}
 
 }
