@@ -14,7 +14,7 @@ import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.GhidraClass;
 import ghidra.program.model.symbol.SourceType;
 
-public class Dhrake extends GhidraScript {
+public class DhrakeParseClass extends GhidraScript {
 
 	protected DataType putType(DataType dt, DataTypeConflictHandler h) {
 		return this.getCurrentProgram().getDataTypeManager().addDataType(dt, h);
