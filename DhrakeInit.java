@@ -375,8 +375,8 @@ public class DhrakeInit extends GhidraScript {
 		if (!this.importSymbolsFromIDC())
 			return;
 
+  	this.repairWrongFunctionEntries();
 		this.repairLibraryFunctionSignatures();
-		this.repairWrongFunctionEntries();
 	}
 
 }
