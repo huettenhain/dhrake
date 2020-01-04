@@ -18,7 +18,7 @@ Dhrake is a collection of scripts for reverse engineering Delphi binaries with [
 
 I have uploaded my [private build if IDR][IDR-BUILD] because building it can be a little time consuming. I compiled this myself from the [IDR] repository in a virtual machine. I take no responsibility what so ever for this software or this build. I run this on my private machine host, I think it is a great piece of software, but if you want to be on the safe side, use a virtual machine.
 
-## What Drake Does
+## What Dhrake Does
 
 There are two major issues when reverse engineering Delphi binaries in Ghidra:
 
