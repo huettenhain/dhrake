@@ -193,6 +193,7 @@ public class DhrakeInit extends GhidraScript {
 					boolean success = false;
 					try {
 						HighFunctionDBUtil.writeOverride(caller, addr, signature);
+						this.logMsg("%08X %s call with N=%d was fixed.", offset, name, count);
 						success = true;
 					} catch (Exception e) {
 						this.logMsg("%08X %s call with N=%d could not be fixed.", offset, name, count);
@@ -348,10 +349,9 @@ public class DhrakeInit extends GhidraScript {
 				if (!previousFunction.isThunk()) {
 					Address start = previousFunction.getEntryPoint();
 					Address end = previousFunction.getBody().getMaxAddress();
-					long size = end.getOffset() - start.getOffset(); 
-					if (size <= 24 && currentFunction.getName().startsWith("FUN_")
-						|| previousFunction.getBody().contains(currentFunction.getEntryPoint()))
-					{
+					long size = end.getOffset() - start.getOffset();
+					int refCount = this.getReferencesTo(currentFunction.getEntryPoint()).length;
+					if (size <= 24 && refCount == 0) {
 						String name = previousFunction.getName();
 						Address next = currentFunction.getBody().getMaxAddress();
 						functionManager.deleteAddressRange(start, next, monitor);
