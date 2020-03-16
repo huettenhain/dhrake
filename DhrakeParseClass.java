@@ -12,6 +12,7 @@ import ghidra.program.model.data.DataTypeConflictHandler;
 import ghidra.program.model.data.DataType;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.GhidraClass;
+import ghidra.program.model.mem.MemoryAccessException;
 import ghidra.program.model.symbol.SourceType;
 
 public class DhrakeParseClass extends GhidraScript {
@@ -35,11 +36,19 @@ public class DhrakeParseClass extends GhidraScript {
 
 	@Override
 	protected void run() throws Exception {
-
+		String className = null;
 		Address nameAddress = this.toAddr(this.getInt(currentAddress.add(32)));
-		String className = new String(
-			this.getBytes(nameAddress.add(1), this.getByte(nameAddress))
-		);
+		try {	
+			className = new String(this.getBytes(nameAddress.add(1), this.getByte(nameAddress)));
+		} catch (MemoryAccessException e) {
+			this.popup(
+				"Unfortunately, we got a memory access error trying to even read the class name. "	+
+				"Either you executed this at the wrong address or the class metadata layout is "	+
+				"unknown. If you can figure out how to identify this Delphi compiler and how it "	+
+				"stores class metadata, that'd be Bill-Lumbergh-Level great."
+			);
+			return;
+		}
 		assert className.startsWith("T");
 		this.log(className);
 		this.log(String.format("creating class %s", className));
