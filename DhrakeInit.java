@@ -6,6 +6,7 @@
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -13,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import org.apache.commons.io.FileUtils;
 
 import ghidra.app.decompiler.DecompInterface;
 import ghidra.app.decompiler.DecompileResults;
@@ -208,6 +211,7 @@ public class DhrakeInit extends GhidraScript {
 	
 	private boolean importSymbolsFromIDC() {
 		File idc;
+		List<String> idcLineList;
 		String[] lines;
 
 		monitor.setMessage("loading symbols from IDC");
@@ -218,13 +222,13 @@ public class DhrakeInit extends GhidraScript {
 			return false;
 		}
 		try {
-			List<String> stringList = Files.readAllLines(idc.toPath(), Charset.defaultCharset());
-			lines = stringList.toArray(new String[]{});
+			idcLineList = FileUtils.readLines(idc, StandardCharsets.UTF_8);
 		} catch (IOException e) {
-			this.logMsg("file not found: %s", idc.getAbsolutePath());
+			this.logMsg("file not found: %s", idc.toPath());
 			return false;
 		}
 
+		lines = idcLineList.toArray(new String[]{});
 		Pattern pattern = Pattern.compile(
 				"^\\s*MakeNameEx\\((?:0x)?([A-Fa-f0-9]+),\\s*\"([^\"]*)\",\\s*([xA-Fa-f0-9]+)\\);\\s*$");
 		monitor.setMaximum(lines.length);
