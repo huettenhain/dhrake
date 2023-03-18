@@ -14,6 +14,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.io.FileInputStream;  
+import java.io.BufferedInputStream;  
+import java.util.Scanner;
 
 import org.apache.commons.io.FileUtils;
 
@@ -211,8 +214,8 @@ public class DhrakeInit extends GhidraScript {
 	
 	private boolean importSymbolsFromIDC() {
 		File idc;
-		List<String> idcLineList;
-		String[] lines;
+		int progress = 0;
+		int linecount = 0;
 
 		monitor.setMessage("loading symbols from IDC");
 
@@ -221,40 +224,51 @@ public class DhrakeInit extends GhidraScript {
 		} catch (CancelledException e) {
 			return false;
 		}
-		try {
-			idcLineList = FileUtils.readLines(idc, StandardCharsets.UTF_8);
+		Pattern pattern = Pattern.compile("^\\s*MakeNameEx\\((?:0x)?([A-Fa-f0-9]+),\\s*\"([^\"]*)\",\\s*([xA-Fa-f0-9]+)\\);\\s*$");
+		
+		
+		try (BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(idc));  Scanner sc = new Scanner(inputStream, "UTF-8");) {
+        	
+			//count lines
+			while (sc.hasNextLine()) {
+				sc.nextLine();
+				linecount++;
+			}
+			monitor.setMaximum(linecount);
 		} catch (IOException e) {
 			this.logMsg("file not found: %s", idc.toPath());
 			return false;
 		}
+		try (BufferedInputStream inputStream  = new BufferedInputStream(new FileInputStream(idc));  Scanner sc = new Scanner(inputStream, "UTF-8");) {
 
-		lines = idcLineList.toArray(new String[]{});
-		Pattern pattern = Pattern.compile(
-				"^\\s*MakeNameEx\\((?:0x)?([A-Fa-f0-9]+),\\s*\"([^\"]*)\",\\s*([xA-Fa-f0-9]+)\\);\\s*$");
-		monitor.setMaximum(lines.length);
-		for (int k=0; k < lines.length; k++) {
-			monitor.setProgress(k);
-			if (!lines[k].contains("MakeNameEx"))
-				continue;
-			Matcher match = pattern.matcher(lines[k]);
-			if (!match.matches())
-				continue;
-			Integer offset = Integer.parseUnsignedInt(match.group(1), 16);
-			Address entryPoint = this.toAddr(offset);
-			String functionName = match.group(2);
-			monitor.setMessage(functionName);
-			if (functionName.strip().length() > 0) {
-				try {
-					this.renameSymbol(entryPoint, functionName);
-				} catch (InvalidInputException e) {
-					this.logMsg("renaming failed for: %s", functionName);
+			while (sc.hasNextLine()) {
+				String line = sc.nextLine();
+		
+				monitor.setProgress(progress++);
+				
+				if (!line.contains("MakeNameEx"))
+					continue;
+				Matcher match = pattern.matcher(line);
+				if (!match.matches())
+					continue;
+				Integer offset = Integer.parseUnsignedInt(match.group(1), 16);
+				Address entryPoint = this.toAddr(offset);
+				String functionName = match.group(2);
+				monitor.setMessage(functionName);
+				if (functionName.strip().length() > 0) {
+					try {
+						this.renameSymbol(entryPoint, functionName);
+					} catch (InvalidInputException e) {
+						this.logMsg("renaming failed for: %s", functionName);
+					}
 				}
 			}
-		}
-
+		} catch (IOException e) {
+			this.logMsg("file not found: %s", idc.toPath());
+			return false;
+		} 
 		return true;
-	}
-	
+	}	
 	private void repairStringCompareFunctions() {
 		try {
 			monitor.setMessage("reparing known function signatures");
