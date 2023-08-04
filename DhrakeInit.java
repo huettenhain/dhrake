@@ -70,7 +70,7 @@ public class DhrakeInit extends GhidraScript {
 		}
 	}
 
-	private void logMsg(String message, Object... args){
+	private void logMsg(String message, Object... args) {
 		this.println(String.format("[Dhrake] %s", String.format(message, args)));
 	}
 

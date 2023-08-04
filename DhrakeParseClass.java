@@ -6,10 +6,10 @@
 import ghidra.app.script.GhidraScript;
 import ghidra.app.util.NamespaceUtils;
 import ghidra.program.model.address.Address;
-import ghidra.program.model.data.StructureDataType;
-import ghidra.program.model.data.FunctionDefinitionDataType;
-import ghidra.program.model.data.DataTypeConflictHandler;
 import ghidra.program.model.data.DataType;
+import ghidra.program.model.data.DataTypeConflictHandler;
+import ghidra.program.model.data.FunctionDefinitionDataType;
+import ghidra.program.model.data.StructureDataType;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.GhidraClass;
 import ghidra.program.model.mem.MemoryAccessException;
@@ -34,30 +34,38 @@ public class DhrakeParseClass extends GhidraScript {
 		this.println(String.format("[Dhrake] %s", message));
 	}
 
+    private void log(String message, Object... args) {
+        this.println(String.format("[Dhrake] %s", String.format(message, args)));
+    }
+
 	@Override
 	protected void run() throws Exception {
 		String className = null;
 		Address nameAddress = this.toAddr(this.getInt(currentAddress.add(32)));
+
 		try {
 			className = new String(this.getBytes(nameAddress.add(1), this.getByte(nameAddress)));
 		} catch (MemoryAccessException e) {
-			this.popup(
-					"Unfortunately, we got a memory access error trying to even read the class name. "	+
-							"Either you executed this at the wrong address or the class metadata layout is "	+
-							"unknown. If you can figure out how to identify this Delphi compiler and how it "	+
-							"stores class metadata, that'd be Bill-Lumbergh-Level great."
-			);
+			this.popup("Unfortunately, we got a memory access error trying to even read the class name. " +
+							"Either you executed this at the wrong address or the class metadata layout is " +
+							"unknown. If you can figure out how to identify this Delphi compiler and how it " +
+							"stores class metadata, that'd be Bill-Lumbergh-Level great.");
 			return;
 		}
+
 		assert className.startsWith("T");
 		this.log(className);
 		this.log(String.format("creating class %s", className));
+
 		GhidraClass classNamespace = NamespaceUtils.convertNamespaceToClass(
-				currentProgram.getSymbolTable().createNameSpace(
-						currentProgram.getGlobalNamespace(), className, SourceType.USER_DEFINED));
+					currentProgram.getSymbolTable().createNameSpace(
+							currentProgram.getGlobalNamespace(), className, SourceType.USER_DEFINED));
+
 		StructureDataType base = new StructureDataType(className, 0);
 		StructureDataType vtbl = new StructureDataType(className + "VT", 0);
+
 		long vt = this.getInt(currentAddress);
+
 		for (long tooDamnHigh = vt + 4 * 100; vt < tooDamnHigh; vt += 4) {
 			try {
 				long offset = this.getInt(this.toAddr(vt));
@@ -82,9 +90,9 @@ public class DhrakeParseClass extends GhidraScript {
 				break;
 			}
 		}
+
 		base.add(this.getCurrentProgram().getDataTypeManager().getPointer(this.putType(vtbl)),
 				 "vt", "Virtual Function Table");
 		this.putType(base);
-
 	}
 }
