@@ -1,5 +1,5 @@
-//Uses metadata from an IDR generated IDC script to rename symbols
-//and fix certain calls in Delphi programs
+// Uses metadata from an IDR-generated IDC script to rename symbols
+// and fix certain calls in Delphi programs
 //@category Delphi
 //@author Jesko Huettenhain
 
@@ -200,18 +200,18 @@ public class DhrakeInit extends GhidraScript {
 		int progress = 0;
 		int linecount = 0;
 
-		monitor.setMessage("loading symbols from IDC");
+		monitor.setMessage("Loading symbols from IDC");
 
 		try {
 			idc = this.askFile("IDC File Path", "Load an IDC file");
 		} catch (CancelledException e) {
 			return false;
 		}
+
 		Pattern pattern = Pattern.compile("^\\s*MakeNameEx\\((?:0x)?([A-Fa-f0-9]+),\\s*\"([^\"]*)\",\\s*([xA-Fa-f0-9]+)\\);\\s*$");
 
-
 		try (BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(idc));  Scanner sc = new Scanner(inputStream, StandardCharsets.UTF_8)) {
-			//count lines
+			// Count lines
 			while (sc.hasNextLine()) {
 				sc.nextLine();
 				linecount++;
@@ -224,7 +224,7 @@ public class DhrakeInit extends GhidraScript {
 
 		try (BufferedInputStream inputStream  = new BufferedInputStream(new FileInputStream(idc));  Scanner sc = new Scanner(inputStream, StandardCharsets.UTF_8)) {
             monitor.setMessage("Processing IDC file");
-            logMsg(String.format("Processing IDC file %s", idc.toPath()));
+            this.logMsg("Processing IDC file %s", idc.toPath());
 
 			while (sc.hasNextLine()) {
                 if (monitor.isCancelled()) break;
@@ -233,11 +233,12 @@ public class DhrakeInit extends GhidraScript {
 
 				monitor.setProgress(progress++);
 
-				if (!line.contains("MakeNameEx"))
-					continue;
+				if (!line.contains("MakeNameEx")) continue;
+
 				Matcher match = pattern.matcher(line);
-				if (!match.matches())
-					continue;
+
+				if (!match.matches()) continue;
+
 				Integer offset = Integer.parseUnsignedInt(match.group(1), 16);
 				Address entryPoint = this.toAddr(offset);
 				String functionName = match.group(2);
@@ -246,7 +247,7 @@ public class DhrakeInit extends GhidraScript {
 					try {
 						this.renameSymbol(entryPoint, functionName);
 					} catch (InvalidInputException e) {
-						this.logMsg("renaming failed for: %s", functionName);
+						this.logMsg("Renaming failed for: %s", functionName);
 					}
 				}
 			}
@@ -258,7 +259,7 @@ public class DhrakeInit extends GhidraScript {
 	}
 	private void repairStringCompareFunctions() {
 		try {
-			monitor.setMessage("reparing known function signatures");
+			monitor.setMessage("Repairing known function signatures");
 
 			VariableStorage zfReturn = new VariableStorage(
 					currentProgram, currentProgram.getRegister("ZF"));
