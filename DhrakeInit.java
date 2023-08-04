@@ -7,6 +7,7 @@ import ghidra.app.decompiler.DecompInterface;
 import ghidra.app.decompiler.DecompileResults;
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.address.Address;
+import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.data.*;
 import ghidra.program.model.lang.Register;
 import ghidra.program.model.listing.*;
@@ -17,6 +18,7 @@ import ghidra.program.model.symbol.RefType;
 import ghidra.program.model.symbol.Reference;
 import ghidra.program.model.symbol.SourceType;
 import ghidra.program.model.symbol.SymbolTable;
+import ghidra.program.model.util.CodeUnitInsertionException;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.exception.InvalidInputException;
@@ -199,6 +201,9 @@ public class DhrakeInit extends GhidraScript {
 		File idc;
 		long progress = 0;
 		int linecount = 0;
+		int countSymbols = 0;
+		int countStrings = 0;
+		int countVMTs = 0;
 
 		monitor.setMessage("Loading symbols from IDC");
 
@@ -208,7 +213,13 @@ public class DhrakeInit extends GhidraScript {
 			return false;
 		}
 
-		Pattern pattern = Pattern.compile("^\\s*MakeNameEx\\((?:0x)?([A-Fa-f0-9]+),\\s*\"([^\"]*)\",\\s*([xA-Fa-f0-9]+)\\);\\s*$");
+		Pattern makeName = Pattern.compile("^\\s*MakeNameEx\\((?:0x)?([A-Fa-f0-9]+),\\s*\"([^\"]*)\",\\s*([xA-Fa-f0-9]+)\\);\\s*$");
+
+		// String Type: group 1
+		Pattern stringType = Pattern.compile("^\\s*SetLongPrm\\(INF_STRTYPE,\\s*ASCSTR_(PASCAL|TERMCHR|UNICODE)\\);\\s*$");
+
+		// Both combined: group 1 = position, group 2 = end or null
+		Pattern makeString = Pattern.compile("^\\s*MakeStr\\((?:0x)?([A-Fa-f0-9]+),\\s*(?:0x)?([-1|A-Fa-f0-9]+)\\s*\\);\\s*$");
 
 		try (BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(idc));  Scanner sc = new Scanner(inputStream, StandardCharsets.UTF_8)) {
 			// Count lines
@@ -226,6 +237,8 @@ public class DhrakeInit extends GhidraScript {
             monitor.setMessage("Processing IDC file");
             this.logMsg("Processing IDC file %s", idc.toPath());
 
+			String foundStringType = "";
+
 			while (sc.hasNextLine()) {
                 if (monitor.isCancelled()) break;
 
@@ -233,21 +246,62 @@ public class DhrakeInit extends GhidraScript {
 
 				monitor.setProgress(progress++);
 
-				if (!line.contains("MakeNameEx")) continue;
+				if (!line.contains("MakeNameEx") && !line.contains("SetLongPrm")) continue;
 
-				Matcher match = pattern.matcher(line);
+				Matcher funcMatch = makeName.matcher(line);
+				Matcher stringTypeMatch = stringType.matcher(line);
 
-				if (!match.matches()) continue;
+				if (!funcMatch.matches() && !stringTypeMatch.matches()) continue;
 
-				Integer offset = Integer.parseUnsignedInt(match.group(1), 16);
-				Address entryPoint = this.toAddr(offset);
-				String functionName = match.group(2);
-				monitor.setMessage(functionName);
-				if (functionName.strip().length() > 0) {
-					try {
-						this.renameSymbol(entryPoint, functionName);
-					} catch (InvalidInputException e) {
-						this.logMsg("Renaming failed for: %s", functionName);
+				// Match: Function
+				if (funcMatch.matches()) {
+					long offset = Long.parseUnsignedLong(funcMatch.group(1), 16);
+					Address entryPoint = this.toAddr(offset);
+					String symName = funcMatch.group(2);
+					monitor.setMessage(symName);
+
+					if (symName.strip().length() > 0) {
+						try {
+							this.logMsg("Renaming symbol at %s to %s", entryPoint, symName);
+							this.renameSymbol(entryPoint, symName);
+							countSymbols++;
+						} catch (InvalidInputException e) {
+							this.logMsg("Renaming failed for: %s", symName);
+						}
+					}
+					continue;
+				}
+
+				// Match: String
+				if (stringTypeMatch.matches()) {
+					foundStringType = stringTypeMatch.group(1);
+					line = sc.nextLine();
+					Matcher stringMatch = makeString.matcher(line);
+
+					if (stringMatch.matches()) {
+						long start  = Long.parseUnsignedLong(stringMatch.group(1), 16);
+						long end    = Long.parseLong(stringMatch.group(2), 16);
+						long length = end > start ? end - start : -1;
+
+						Address startAddr = this.toAddr(start);
+						Address endAddr   = this.toAddr(end);
+
+						// Debug:
+						// monitor.setMessage(String.format("Found %s string at %s", foundStringType, startAddr.toString()));
+						// logMsg(String.format("Line %s found %s string at %s", progress, foundStringType, startAddr));
+
+						// Process Unicode strings for now
+						if (foundStringType.equals("UNICODE")) {
+							createPascalString(foundStringType, startAddr, endAddr, length);
+							countStrings++;
+						}
+
+						// Notes to self:
+						// PASCAL = ShortString => 'PascalString255' (ikString)
+						// TERMCHR = String (L) = Pointer String, AnsiString (L,R) => 'PascalString'
+						//   If TERMCHR has a length, can be: PChar, PAnsiChar (ikCString)
+						//   If TERMCHR has a length of -1, it's an AnsiString (ikLString)
+						// UNICODE = WideString (L), Unicode (L,R,W,C) => 'PascalUnicode'
 					}
 				}
 			}
@@ -255,8 +309,65 @@ public class DhrakeInit extends GhidraScript {
 			this.logMsg("file not found: %s", idc.toPath());
 			return false;
 		}
+
+		this.logMsg("Total symbols: %d", countSymbols);
+		this.logMsg("Total strings: %d", countStrings);
+		this.logMsg("Total VMTs   : %d", countVMTs);
+
 		return true;
 	}
+
+	private void createPascalString(String type, Address start, Address end, long length) {
+		try {
+			if (this.getReferencesFrom(start).length > 0) {
+				this.logMsg("Found references from %s", start);
+				if (this.getReferencesTo(start).length > 0) {
+					this.logMsg("Found references to %s", start);
+				}
+				return;
+			}
+
+			// move this up
+			if (this.getDataAt(start) != null) {
+				if (this.getDataAt(start).isDefined()) {
+					this.logMsg("Data is defined at %s", start);
+				}
+
+				if (this.getDataAt(start).isPointer()) {
+					this.logMsg("Data defined at %s is a pointer", start);
+					return;
+				}
+			}
+
+			if (this.getDataAfter(start).hasStringValue()) {
+				this.logMsg("Data after %s => %s has a string value", start, start.next());
+				if (length > 0) {
+					this.clearListing(new AddressSet(start, end));
+				} else {
+					this.clearListing(start);
+				}
+			}
+
+			// todo: allow user to adjust the minimum length
+			if (length > 5) {
+           		if (this.getDataAt(start) == null) {
+					this.logMsg("Found %s string at %s", type, start);
+
+					switch (type) {
+						case "PASCAL" -> this.createData(start, new PascalString255DataType());
+						case "TERMCHR" -> this.createData(start, new PascalStringDataType());
+						case "UNICODE" -> this.createData(start, new UnicodeDataType());
+						// case "UNICODE" -> this.createData(start, new PascalUnicodeDataType());
+					}
+				}
+			}
+		} catch (CodeUnitInsertionException e) {
+			this.logMsg("Cannot create string, conflicting data at address %s", start);
+		} catch (Exception e) {
+			this.logMsg("Cannot create string at %s, exception: %s", start, e);
+		}
+	}
+
 	private void repairStringCompareFunctions() {
 		try {
 			monitor.setMessage("Repairing known function signatures");
