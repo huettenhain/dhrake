@@ -197,7 +197,7 @@ public class DhrakeInit extends GhidraScript {
 
 	private boolean importSymbolsFromIDC() {
 		File idc;
-		int progress = 0;
+		long progress = 0;
 		int linecount = 0;
 
 		monitor.setMessage("Loading symbols from IDC");
