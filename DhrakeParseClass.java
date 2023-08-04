@@ -29,7 +29,7 @@ public class DhrakeParseClass extends GhidraScript {
 		FunctionDefinitionDataType ft = new FunctionDefinitionDataType(fn, false);
 		return this.putType(ft, DataTypeConflictHandler.KEEP_HANDLER);
 	}
-	
+
 	protected void log(String message) {
 		this.println(String.format("[Dhrake] %s", message));
 	}
@@ -38,14 +38,14 @@ public class DhrakeParseClass extends GhidraScript {
 	protected void run() throws Exception {
 		String className = null;
 		Address nameAddress = this.toAddr(this.getInt(currentAddress.add(32)));
-		try {	
+		try {
 			className = new String(this.getBytes(nameAddress.add(1), this.getByte(nameAddress)));
 		} catch (MemoryAccessException e) {
 			this.popup(
-				"Unfortunately, we got a memory access error trying to even read the class name. "	+
-				"Either you executed this at the wrong address or the class metadata layout is "	+
-				"unknown. If you can figure out how to identify this Delphi compiler and how it "	+
-				"stores class metadata, that'd be Bill-Lumbergh-Level great."
+					"Unfortunately, we got a memory access error trying to even read the class name. "	+
+							"Either you executed this at the wrong address or the class metadata layout is "	+
+							"unknown. If you can figure out how to identify this Delphi compiler and how it "	+
+							"stores class metadata, that'd be Bill-Lumbergh-Level great."
 			);
 			return;
 		}
@@ -53,8 +53,8 @@ public class DhrakeParseClass extends GhidraScript {
 		this.log(className);
 		this.log(String.format("creating class %s", className));
 		GhidraClass classNamespace = NamespaceUtils.convertNamespaceToClass(
-			currentProgram.getSymbolTable().createNameSpace(
-				currentProgram.getGlobalNamespace(), className, SourceType.USER_DEFINED));
+				currentProgram.getSymbolTable().createNameSpace(
+						currentProgram.getGlobalNamespace(), className, SourceType.USER_DEFINED));
 		StructureDataType base = new StructureDataType(className, 0);
 		StructureDataType vtbl = new StructureDataType(className + "VT", 0);
 		long vt = this.getInt(currentAddress);
@@ -83,7 +83,7 @@ public class DhrakeParseClass extends GhidraScript {
 			}
 		}
 		base.add(this.getCurrentProgram().getDataTypeManager().getPointer(this.putType(vtbl)),
-			"vt", "Virtual Function Table");
+				 "vt", "Virtual Function Table");
 		this.putType(base);
 
 	}
