@@ -73,7 +73,7 @@ public class DhrakeInit extends GhidraScript {
 	}
 
 	private long getConstantCallArgument(Function caller, Address addr, int index) throws IllegalStateException {
-		// This is a very reliable and slow fallback to determine the value of a constant argument 
+		// This is a very reliable and slow fallback to determine the value of a constant argument
 		// to a function call at a given address within a given function.
 		monitor.setMessage("obtaining decompiler interface");
 		DecompInterface decompInterface = new DecompInterface();
@@ -211,7 +211,6 @@ public class DhrakeInit extends GhidraScript {
 
 
 		try (BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(idc));  Scanner sc = new Scanner(inputStream, StandardCharsets.UTF_8)) {
-
 			//count lines
 			while (sc.hasNextLine()) {
 				sc.nextLine();
@@ -222,9 +221,14 @@ public class DhrakeInit extends GhidraScript {
 			this.logMsg("file not found: %s", idc.toPath());
 			return false;
 		}
+
 		try (BufferedInputStream inputStream  = new BufferedInputStream(new FileInputStream(idc));  Scanner sc = new Scanner(inputStream, StandardCharsets.UTF_8)) {
+            monitor.setMessage("Processing IDC file");
+            logMsg(String.format("Processing IDC file %s", idc.toPath()));
 
 			while (sc.hasNextLine()) {
+                if (monitor.isCancelled()) break;
+
 				String line = sc.nextLine();
 
 				monitor.setProgress(progress++);
