@@ -6,10 +6,7 @@
 import ghidra.app.script.GhidraScript;
 import ghidra.app.util.NamespaceUtils;
 import ghidra.program.model.address.Address;
-import ghidra.program.model.data.StructureDataType;
-import ghidra.program.model.data.FunctionDefinitionDataType;
-import ghidra.program.model.data.DataTypeConflictHandler;
-import ghidra.program.model.data.DataType;
+import ghidra.program.model.data.*;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.GhidraClass;
 import ghidra.program.model.mem.MemoryAccessException;
@@ -35,9 +32,9 @@ public class DhrakeParseClass extends GhidraScript {
 		this.println(String.format("[Dhrake] %s", message));
 	}
 
-    private void log(String message, Object... args) {
-        this.println(String.format("[Dhrake] %s", String.format(message, args)));
-    }
+	private void log(String message, Object... args) {
+		this.println(String.format("[Dhrake] %s", String.format(message, args)));
+	}
 
 	@Override
 	protected void run() throws Exception {
@@ -45,6 +42,8 @@ public class DhrakeParseClass extends GhidraScript {
 		Address nameAddress = this.toAddr(this.getInt(currentAddress.add(32)));
 
 		try {
+			this.clearListing(nameAddress, nameAddress.add(1));
+			this.createData(nameAddress, PascalString255DataType.dataType);
 			className = new String(this.getBytes(nameAddress.add(1), this.getByte(nameAddress)));
 		} catch (MemoryAccessException e) {
 			this.popup("Unfortunately, we got a memory access error trying to even read the class name. " +
