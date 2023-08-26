@@ -1,51 +1,36 @@
-//Uses metadata from an IDR generated IDC script to rename symbols
-//and fix certain calls in Delphi programs
+// Uses metadata from an IDR-generated IDC script to rename symbols
+// and fix certain calls in Delphi programs
 //@category Delphi
 //@author Jesko Huettenhain
-
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.io.FileInputStream;  
-import java.io.BufferedInputStream;  
-import java.util.Scanner;
-
-import org.apache.commons.io.FileUtils;
 
 import ghidra.app.decompiler.DecompInterface;
 import ghidra.app.decompiler.DecompileResults;
 import ghidra.app.script.GhidraScript;
+import ghidra.program.model.address.Address;
+import ghidra.program.model.address.AddressSet;
+import ghidra.program.model.data.*;
+import ghidra.program.model.lang.Register;
+import ghidra.program.model.listing.*;
+import ghidra.program.model.listing.Function.FunctionUpdateType;
+import ghidra.program.model.pcode.*;
+import ghidra.program.model.scalar.Scalar;
+import ghidra.program.model.symbol.RefType;
+import ghidra.program.model.symbol.Reference;
+import ghidra.program.model.symbol.SourceType;
+import ghidra.program.model.symbol.SymbolTable;
+import ghidra.program.model.util.CodeUnitInsertionException;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.exception.InvalidInputException;
-import ghidra.program.model.symbol.*;
-import ghidra.program.model.listing.*;
-import ghidra.program.model.listing.Function.FunctionUpdateType;
-import ghidra.program.model.pcode.HighFunction;
-import ghidra.program.model.pcode.HighFunctionDBUtil;
-import ghidra.program.model.pcode.PcodeOp;
-import ghidra.program.model.pcode.PcodeOpAST;
-import ghidra.program.model.pcode.Varnode;
-import ghidra.program.model.scalar.Scalar;
-import ghidra.program.model.address.*;
-import ghidra.program.model.data.BooleanDataType;
-import ghidra.program.model.data.ByteDataType;
-import ghidra.program.model.data.CharDataType;
-import ghidra.program.model.data.DataType;
-import ghidra.program.model.data.FunctionDefinitionDataType;
-import ghidra.program.model.data.ParameterDefinitionImpl;
-import ghidra.program.model.data.PointerDataType;
-import ghidra.program.model.data.UnsignedIntegerDataType;
-import ghidra.program.model.data.WideCharDataType;
-import ghidra.program.model.lang.Register;
+
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class DhrakeInit extends GhidraScript {
 
@@ -61,11 +46,11 @@ public class DhrakeInit extends GhidraScript {
 	static DataType BOOL = BooleanDataType.dataType;
 
 	static SourceType DhrakeSource = SourceType.ANALYSIS;
-	
+
 	private void renameSymbol(Address entryPoint, String name) throws InvalidInputException {
 		this.renameSymbol(entryPoint, name, DhrakeSource);
 	}
-	
+
 	private void renameSymbol(Address entryPoint, String name, SourceType type) throws InvalidInputException {
 		Function f = this.getFunctionAt(entryPoint);
 		SymbolTable symbolTable = currentProgram.getSymbolTable();
@@ -84,13 +69,13 @@ public class DhrakeInit extends GhidraScript {
 			}
 		}
 	}
-	
-	private void logMsg(String message, Object... args){
+
+	private void logMsg(String message, Object... args) {
 		this.println(String.format("[Dhrake] %s", String.format(message, args)));
 	}
-	
+
 	private long getConstantCallArgument(Function caller, Address addr, int index) throws IllegalStateException {
-		// This is a very reliable and slow fallback to determine the value of a constant argument 
+		// This is a very reliable and slow fallback to determine the value of a constant argument
 		// to a function call at a given address within a given function.
 		monitor.setMessage("obtaining decompiler interface");
 		DecompInterface decompInterface = new DecompInterface();
@@ -113,7 +98,7 @@ public class DhrakeInit extends GhidraScript {
 		}
 		throw new IllegalStateException();
 	}
-	
+
 	private long getStrCatCount(Function caller, Address addr) {
 		// Usually, the second (constant) argument to a *StrCatN function is assigned to
 		// the EDX register right before the call instruction. This method attempts to
@@ -123,8 +108,8 @@ public class DhrakeInit extends GhidraScript {
 			Instruction insn = this.getInstructionBefore(addr);
 			if (insn == null || insn.getNumOperands() != 2)
 				return this.getConstantCallArgument(caller, addr, 2);
-			Object EDX[] = insn.getOpObjects(0);
-			Object IMM[] = insn.getOpObjects(1);
+			Object[] EDX = insn.getOpObjects(0);
+			Object[] IMM = insn.getOpObjects(1);
 			if (insn.getOperandRefType(0) != RefType.WRITE)
 				return this.getConstantCallArgument(caller, addr, 2);
 			if (EDX.length != 1 || !(EDX[0] instanceof Register))
@@ -144,19 +129,19 @@ public class DhrakeInit extends GhidraScript {
 		DataType PPTSTR = PointerDataType.getPointer(LPTSTR, currentProgram.getDataTypeManager());
 		Iterator<Function> functions = this.getGlobalFunctions(name).iterator();
 		while (functions.hasNext()) {
-			Function StrCatN = functions.next();
-			Reference refs[] = this.getReferencesTo(StrCatN.getEntryPoint());
+			Function    StrCatN = functions.next();
+			Reference[] refs    = this.getReferencesTo(StrCatN.getEntryPoint());
 			StrCatN.setVarArgs(true);
 
 			try {
 				StrCatN.replaceParameters(
-					FunctionUpdateType.DYNAMIC_STORAGE_ALL_PARAMS,
-					true,
-					DhrakeSource, 
-					new ParameterImpl("Result", PPTSTR, currentProgram),
-					new ParameterImpl("Count", UINT, currentProgram)
+						FunctionUpdateType.DYNAMIC_STORAGE_ALL_PARAMS,
+						true,
+						DhrakeSource,
+						new ParameterImpl("Result", PPTSTR, currentProgram),
+						new ParameterImpl("Count", UINT, currentProgram)
 				);
-			} catch (Exception e) { 
+			} catch (Exception e) {
 				long offset = StrCatN.getEntryPoint().getOffset();
 				this.logMsg("%08X Unable to correctly retype %s.", offset, name);
 			}
@@ -186,7 +171,7 @@ public class DhrakeInit extends GhidraScript {
 					// passed in the ECX register. The best solution I could come up with is to add a dummy
 					// variable which represents this third argument, which does not actually exist:
 					args.add(new ParameterDefinitionImpl(
-						String.format("__dummy_%02d", offset & 0xFF), UINT, "Dummy Variable"));
+							String.format("__dummy_%02d", offset & 0xFF), UINT, "Dummy Variable"));
 
 					for (long k=0; k < count; k++)
 						args.add(new ParameterDefinitionImpl(String.format("String%d", count - k), LPTSTR, ""));
@@ -195,7 +180,7 @@ public class DhrakeInit extends GhidraScript {
 					signature.setReturnType(UINT);
 					signature.setVarArgs(false);
 					int transaction = currentProgram.startTransaction(
-						String.format("Fixing call to %s at %08X", name, offset));
+							String.format("Fixing call to %s at %08X", name, offset));
 					boolean success = false;
 					try {
 						HighFunctionDBUtil.writeOverride(caller, addr, signature);
@@ -211,25 +196,33 @@ public class DhrakeInit extends GhidraScript {
 			}
 		}
 	}
-	
+
 	private boolean importSymbolsFromIDC() {
 		File idc;
-		int progress = 0;
+		long progress = 0;
 		int linecount = 0;
+		int countSymbols = 0;
+		int countStrings = 0;
+		int countVMTs = 0;
 
-		monitor.setMessage("loading symbols from IDC");
+		monitor.setMessage("Loading symbols from IDC");
 
 		try {
 			idc = this.askFile("IDC File Path", "Load an IDC file");
 		} catch (CancelledException e) {
 			return false;
 		}
-		Pattern pattern = Pattern.compile("^\\s*MakeNameEx\\((?:0x)?([A-Fa-f0-9]+),\\s*\"([^\"]*)\",\\s*([xA-Fa-f0-9]+)\\);\\s*$");
-		
-		
-		try (BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(idc));  Scanner sc = new Scanner(inputStream, "UTF-8");) {
-        	
-			//count lines
+
+		Pattern makeName = Pattern.compile("^\\s*MakeNameEx\\((?:0x)?([A-Fa-f0-9]+),\\s*\"([^\"]*)\",\\s*([xA-Fa-f0-9]+)\\);\\s*$");
+
+		// String Type: group 1
+		Pattern stringType = Pattern.compile("^\\s*SetLongPrm\\(INF_STRTYPE,\\s*ASCSTR_(PASCAL|TERMCHR|UNICODE)\\);\\s*$");
+
+		// Both combined: group 1 = position, group 2 = end or null
+		Pattern makeString = Pattern.compile("^\\s*MakeStr\\((?:0x)?([A-Fa-f0-9]+),\\s*(?:0x)?([-1|A-Fa-f0-9]+)\\s*\\);\\s*$");
+
+		try (BufferedInputStream inputStream = new BufferedInputStream(new FileInputStream(idc));  Scanner sc = new Scanner(inputStream, StandardCharsets.UTF_8)) {
+			// Count lines
 			while (sc.hasNextLine()) {
 				sc.nextLine();
 				linecount++;
@@ -239,74 +232,180 @@ public class DhrakeInit extends GhidraScript {
 			this.logMsg("file not found: %s", idc.toPath());
 			return false;
 		}
-		try (BufferedInputStream inputStream  = new BufferedInputStream(new FileInputStream(idc));  Scanner sc = new Scanner(inputStream, "UTF-8");) {
+
+		try (BufferedInputStream inputStream  = new BufferedInputStream(new FileInputStream(idc));  Scanner sc = new Scanner(inputStream, StandardCharsets.UTF_8)) {
+            monitor.setMessage("Processing IDC file");
+            this.logMsg("Processing IDC file %s", idc.toPath());
+
+			String foundStringType = "";
 
 			while (sc.hasNextLine()) {
+                if (monitor.isCancelled()) break;
+
 				String line = sc.nextLine();
-		
+
 				monitor.setProgress(progress++);
-				
-				if (!line.contains("MakeNameEx"))
+
+				if (!line.contains("MakeNameEx") && !line.contains("SetLongPrm")) continue;
+
+				Matcher funcMatch = makeName.matcher(line);
+				Matcher stringTypeMatch = stringType.matcher(line);
+
+				if (!funcMatch.matches() && !stringTypeMatch.matches()) continue;
+
+				// Match: Function
+				if (funcMatch.matches()) {
+					long offset = Long.parseUnsignedLong(funcMatch.group(1), 16);
+					Address entryPoint = this.toAddr(offset);
+					String symName = funcMatch.group(2);
+					monitor.setMessage(symName);
+
+					if (symName.strip().length() > 0) {
+						try {
+							this.logMsg("Renaming symbol at %s to %s", entryPoint, symName);
+							this.renameSymbol(entryPoint, symName);
+							countSymbols++;
+						} catch (InvalidInputException e) {
+							this.logMsg("Renaming failed for: %s", symName);
+						}
+					}
 					continue;
-				Matcher match = pattern.matcher(line);
-				if (!match.matches())
-					continue;
-				Integer offset = Integer.parseUnsignedInt(match.group(1), 16);
-				Address entryPoint = this.toAddr(offset);
-				String functionName = match.group(2);
-				monitor.setMessage(functionName);
-				if (functionName.strip().length() > 0) {
-					try {
-						this.renameSymbol(entryPoint, functionName);
-					} catch (InvalidInputException e) {
-						this.logMsg("renaming failed for: %s", functionName);
+				}
+
+				// Match: String
+				if (stringTypeMatch.matches()) {
+					foundStringType = stringTypeMatch.group(1);
+					line = sc.nextLine();
+					Matcher stringMatch = makeString.matcher(line);
+
+					if (stringMatch.matches()) {
+						long start  = Long.parseUnsignedLong(stringMatch.group(1), 16);
+						long end    = Long.parseLong(stringMatch.group(2), 16);
+						long length = end > start ? end - start : -1;
+
+						Address startAddr = this.toAddr(start);
+						Address endAddr   = this.toAddr(end);
+
+						// Debug:
+						// monitor.setMessage(String.format("Found %s string at %s", foundStringType, startAddr.toString()));
+						// logMsg(String.format("Line %s found %s string at %s", progress, foundStringType, startAddr));
+
+						// Process Unicode strings for now
+						if (foundStringType.equals("UNICODE")) {
+							createPascalString(foundStringType, startAddr, endAddr, length);
+							countStrings++;
+						}
+
+						// Notes to self:
+						// PASCAL = ShortString => 'PascalString255' (ikString)
+						// TERMCHR = String (L) = Pointer String, AnsiString (L,R) => 'PascalString'
+						//   If TERMCHR has a length, can be: PChar, PAnsiChar (ikCString)
+						//   If TERMCHR has a length of -1, it's an AnsiString (ikLString)
+						// UNICODE = WideString (L), Unicode (L,R,W,C) => 'PascalUnicode'
 					}
 				}
 			}
 		} catch (IOException e) {
 			this.logMsg("file not found: %s", idc.toPath());
 			return false;
-		} 
+		}
+
+		this.logMsg("Total symbols: %d", countSymbols);
+		this.logMsg("Total strings: %d", countStrings);
+		this.logMsg("Total VMTs   : %d", countVMTs);
+
 		return true;
-	}	
+	}
+
+	private void createPascalString(String type, Address start, Address end, long length) {
+		try {
+			if (this.getReferencesFrom(start).length > 0) {
+				this.logMsg("Found references from %s", start);
+				if (this.getReferencesTo(start).length > 0) {
+					this.logMsg("Found references to %s", start);
+				}
+				return;
+			}
+
+			// move this up
+			if (this.getDataAt(start) != null) {
+				if (this.getDataAt(start).isDefined()) {
+					this.logMsg("Data is defined at %s", start);
+				}
+
+				if (this.getDataAt(start).isPointer()) {
+					this.logMsg("Data defined at %s is a pointer", start);
+					return;
+				}
+			}
+
+			if (this.getDataAfter(start).hasStringValue()) {
+				this.logMsg("Data after %s => %s has a string value", start, start.next());
+				if (length > 0) {
+					this.clearListing(new AddressSet(start, end));
+				} else {
+					this.clearListing(start);
+				}
+			}
+
+			// todo: allow user to adjust the minimum length
+			if (length > 5) {
+           		if (this.getDataAt(start) == null) {
+					this.logMsg("Found %s string at %s", type, start);
+
+					switch (type) {
+						case "PASCAL" -> this.createData(start, new PascalString255DataType());
+						case "TERMCHR" -> this.createData(start, new PascalStringDataType());
+						case "UNICODE" -> this.createData(start, new UnicodeDataType());
+						// case "UNICODE" -> this.createData(start, new PascalUnicodeDataType());
+					}
+				}
+			}
+		} catch (CodeUnitInsertionException e) {
+			this.logMsg("Cannot create string, conflicting data at address %s", start);
+		} catch (Exception e) {
+			this.logMsg("Cannot create string at %s, exception: %s", start, e);
+		}
+	}
+
 	private void repairStringCompareFunctions() {
 		try {
-			monitor.setMessage("reparing known function signatures");
+			monitor.setMessage("Repairing known function signatures");
 
 			VariableStorage zfReturn = new VariableStorage(
-				currentProgram, currentProgram.getRegister("ZF"));
+					currentProgram, currentProgram.getRegister("ZF"));
 			Map<String, DataType[]> comparators = Map.of(
-				"@PStrCmp", new DataType[] { LPBYTE, LPBYTE },
-				"@LStrCmp", new DataType[] { LPCSTR, LPCSTR },
-				"@WStrCmp", new DataType[] { LPWSTR, LPWSTR },
-				"@UStrCmp", new DataType[] { LPWSTR, LPWSTR },
-				"@AStrCmp", new DataType[] { LPCSTR, LPCSTR, UINT }
+					"@PStrCmp", new DataType[] { LPBYTE, LPBYTE },
+					"@LStrCmp", new DataType[] { LPCSTR, LPCSTR },
+					"@WStrCmp", new DataType[] { LPWSTR, LPWSTR },
+					"@UStrCmp", new DataType[] { LPWSTR, LPWSTR },
+					"@AStrCmp", new DataType[] { LPCSTR, LPCSTR, UINT }
 			);
 			Register argLocations[] = new Register[] {
-				currentProgram.getRegister("EAX"),
-				currentProgram.getRegister("EDX"),
-				currentProgram.getRegister("ECX")
+					currentProgram.getRegister("EAX"),
+					currentProgram.getRegister("EDX"),
+					currentProgram.getRegister("ECX")
 			};
-			String argNames[] = new String[] {"a", "b", "size"};
+			String[] argNames = new String[] {"a", "b", "size"};
 
-			for (Map.Entry<String, DataType[]> cmp : comparators.entrySet()) {	   
+			for (Map.Entry<String, DataType[]> cmp : comparators.entrySet()) {
 				Iterator<Function> functions = this.getGlobalFunctions(cmp.getKey()).iterator();
 				while (functions.hasNext()) {
 					Function function = functions.next();
 					function.setCustomVariableStorage(true);
 					function.setReturn(BOOL, zfReturn, DhrakeSource);
-					DataType argTypes[] = cmp.getValue();
-					List <ParameterImpl> args = new ArrayList<>();
+					DataType[] argTypes = cmp.getValue();
+					List <ParameterImpl> args     = new ArrayList<>();
 					for (int k = 0; k < argTypes.length; k++)
 						args.add(new ParameterImpl(argNames[k], argTypes[k], argLocations[k], currentProgram));
-					ParameterImpl argumentArray[] = args.toArray(new ParameterImpl[args.size()]);
+					ParameterImpl[] argumentArray = args.toArray(new ParameterImpl[args.size()]);
 					try {
 						function.replaceParameters(
-							FunctionUpdateType.CUSTOM_STORAGE, true, DhrakeSource, argumentArray
+								FunctionUpdateType.CUSTOM_STORAGE, true, DhrakeSource, argumentArray
 						);
-					} catch (DuplicateNameException e) { 
+					} catch (DuplicateNameException e) {
 						this.logMsg("%08X Unable to correctly retype %s.",
-							function.getEntryPoint().getOffset(), cmp.getKey()
+									function.getEntryPoint().getOffset(), cmp.getKey()
 						);
 					}
 				}
@@ -315,9 +414,9 @@ public class DhrakeInit extends GhidraScript {
 			this.logMsg("Unexpected error obtaining registers");
 		}
 	}
-	
+
 	public void repairLibraryFunctionSignatures() {
-	
+
 		this.overrideStrCatN("@LStrCatN", LPCSTR);
 		this.overrideStrCatN("@WStrCatN", LPWSTR);
 		this.overrideStrCatN("@UStrCatN", LPWSTR);
@@ -325,33 +424,33 @@ public class DhrakeInit extends GhidraScript {
 		this.repairStringCompareFunctions();
 
 		Map<String, DataType[]> comparators = Map.of(
-			"@LStrCat3", new DataType[] { LPPCSTR, LPCSTR, LPCSTR },
-			"@UStrCat3", new DataType[] { LPPWSTR, LPWSTR, LPWSTR },
-			"@WStrCat3", new DataType[] { LPPWSTR, LPWSTR, LPWSTR }
+				"@LStrCat3", new DataType[] { LPPCSTR, LPCSTR, LPCSTR },
+				"@UStrCat3", new DataType[] { LPPWSTR, LPWSTR, LPWSTR },
+				"@WStrCat3", new DataType[] { LPPWSTR, LPWSTR, LPWSTR }
 		);
 
-		for (Map.Entry<String, DataType[]> sig : comparators.entrySet()) {	   
+		for (Map.Entry<String, DataType[]> sig : comparators.entrySet()) {
 			Iterator<Function> functions = this.getGlobalFunctions(sig.getKey()).iterator();
 			while (functions.hasNext()) {
-				Function function = functions.next();
-				DataType argTypes[] = sig.getValue();
-				List <ParameterImpl> args = new ArrayList<>();
+                Function   function = functions.next();
+                DataType[] argTypes = sig.getValue();
+				List <ParameterImpl> args     = new ArrayList<>();
 				try {
 					for (int k = 0; k < argTypes.length; k++)
 						args.add(new ParameterImpl(String.format("a%d", k), argTypes[k], currentProgram));
-					ParameterImpl argumentArray[] = args.toArray(new ParameterImpl[args.size()]);
+					ParameterImpl[] argumentArray = args.toArray(new ParameterImpl[args.size()]);
 					function.replaceParameters(
-						FunctionUpdateType.DYNAMIC_STORAGE_ALL_PARAMS, true, DhrakeSource, argumentArray
+							FunctionUpdateType.DYNAMIC_STORAGE_ALL_PARAMS, true, DhrakeSource, argumentArray
 					);
-				} catch (Exception e) { 
+				} catch (Exception e) {
 					this.logMsg("%08X Unable to correctly retype %s.",
-						function.getEntryPoint().getOffset(), sig.getKey()
+								function.getEntryPoint().getOffset(), sig.getKey()
 					);
 				}
 			}
 		}
 	}
-	
+
 	private void repairWrongFunctionEntries() {
 		// This function attempts to detect and fix situations where Ghidra has incorrectly placed
 		// the entry point of a Delphi function after the actual entry point.
@@ -385,7 +484,7 @@ public class DhrakeInit extends GhidraScript {
 			currentProgram.endTransaction(transaction, success);
 		}
 	}
-	
+
 	public void run()  {
 		monitor.setCancelEnabled(true);
 		monitor.setShowProgressValue(true);
