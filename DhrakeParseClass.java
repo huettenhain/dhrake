@@ -23,9 +23,11 @@ public class DhrakeParseClass extends GhidraScript {
 		return this.putType(dt, DataTypeConflictHandler.REPLACE_HANDLER);
 	}
 
-	protected DataType addFnType(Function fn) {
+	protected Pointer addFnType(Function fn) {
 		FunctionDefinitionDataType ft = new FunctionDefinitionDataType(fn, false);
-		return this.putType(ft, DataTypeConflictHandler.KEEP_HANDLER);
+		DataType fnDt = this.putType(ft, DataTypeConflictHandler.KEEP_HANDLER);
+		Pointer ptr = this.getCurrentProgram().getDataTypeManager().getPointer(fnDt);
+		return ptr;
 	}
 
 	protected void log(String message) {
@@ -97,7 +99,12 @@ public class DhrakeParseClass extends GhidraScript {
 					}
 				}
 
-				base.add(this.getCurrentProgram().getDataTypeManager().getPointer(this.putType(vtbl)), "vt", "Virtual Function Table");
+				base.add(this
+                    .getCurrentProgram()
+                    .getDataTypeManager()
+                    .getPointer(this.putType(vtbl)
+                ), "vt", "Virtual Function Table");
+
 				this.putType(base);
 			}
 		}
